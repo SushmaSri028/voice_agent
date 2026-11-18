@@ -4,12 +4,36 @@ import './App.css'
 type Status = 'standby' | 'listening' | 'thinking' | 'speaking'
 type AgendaItem = { id: number; title: string; start: string; location: string }
 
+// Very forgiving check, based on what Chrome actually heard:
+// "hey hasta", "hey hast", "hey astha", "hasta", "hairst", "hairstyle"...
+// Very forgiving check, based on what Chrome actually heard
+function isWakeWord(text: string) {
+  const clean = text.toLowerCase().replace(/[^a-z\s]/g, ' ').replace(/\s+/g, ' ').trim()
+  return (
+    /\b(hey|hi|hay|ok|okay)\s+h?a+s+h?t+h?a*\b/.test(clean) || // hey astha, hey hasta, hey hast
+    /\b(hey|hi|hay|ok|okay)\s+(austin|aston|astin|astra|aster|esther)\b/.test(clean) || // hey austin, hey astra
+    /\bh?a+s+h?t+h?a+\b/.test(clean) || // astha / hasta on its own
+    /\bhairst/.test(clean) // hairst, hairstyle, hairstra
+  )
+}
+
+function getRecognizer() {
+  const SpeechRecognition =
+    (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+  return SpeechRecognition ? new SpeechRecognition() : null
+}
+
 function App() {
   const [status, setStatus] = useState<Status>('standby')
   const [heard, setHeard] = useState('')
   const [reply, setReply] = useState('')
   const [agenda, setAgenda] = useState<AgendaItem[]>([])
+  const [awake, setAwake] = useState(true)
+  const [wakeMode, setWakeMode] = useState(false)
+
   const recognitionRef = useRef<any>(null)
+  const wakeRecognitionRef = useRef<any>(null)
+  const wakeModeRef = useRef(false)
   const historyRef = useRef<{ role: 'user' | 'assistant'; content: string }[]>([])
 
   // Load saved plans when the app opens
@@ -20,20 +44,87 @@ function App() {
       .catch(() => {})
   }, [])
 
-  // 3. Speak the reply out loud
+  // Wake-word mode: after 8 quiet seconds, go to sleep and wait for "Hey Astha"
+  useEffect(() => {
+    if (!wakeMode || !awake || status !== 'standby') return
+    const timer = setTimeout(() => {
+      setAwake(false)
+      setHeard('')
+      setReply('')
+      listenForWakeWord()
+    }, 8000)
+    return () => clearTimeout(timer)
+  }, [wakeMode, awake, status])
+
+  // ---------- Wake word ----------
+  function listenForWakeWord() {
+    const recognition = getRecognizer()
+    if (!recognition) return
+
+    recognition.continuous = true
+    recognition.interimResults = true
+        recognition.lang = 'en-IN' // Indian English knows the name "Astha" better
+
+    let woke = false
+
+    recognition.onresult = (event: any) => {
+      const last = event.results[event.results.length - 1][0].transcript.toLowerCase()
+      console.log('Wake listener heard:', last)
+        if (isWakeWord(last)) {
+        woke = true
+        recognition.stop()
+      }
+    }
+
+    recognition.onend = () => {
+      if (woke) wakeUp()
+      // Chrome stops listening after a while: start again
+      else if (wakeModeRef.current) setTimeout(listenForWakeWord, 300)
+    }
+
+    wakeRecognitionRef.current = recognition
+    recognition.start()
+  }
+
+  function stopWakeListener() {
+    const r = wakeRecognitionRef.current
+    if (r) {
+      r.onend = null
+      r.stop()
+    }
+  }
+
+  function wakeUp() {
+    setAwake(true)
+    setHeard('')
+    setReply('')
+    speak('Yes?') // ends with "?" so the mic turns on for your command
+  }
+
+  function toggleWakeMode() {
+    if (wakeModeRef.current) {
+      wakeModeRef.current = false
+      setWakeMode(false)
+      stopWakeListener()
+      setAwake(true)
+    } else {
+      wakeModeRef.current = true
+      setWakeMode(true)
+    }
+  }
+
+  // ---------- Conversation ----------
   function speak(text: string) {
     setStatus('speaking')
     setReply(text)
     const utterance = new SpeechSynthesisUtterance(text)
     utterance.onend = () => {
-      // If Mini Astha asked a question, listen for the answer automatically
       if (text.trim().endsWith('?')) startListening()
       else setStatus('standby')
     }
     window.speechSynthesis.speak(utterance)
   }
 
-  // 2. Ask the AI brain
   async function think(text: string) {
     setStatus('thinking')
     historyRef.current.push({ role: 'user', content: text })
@@ -53,17 +144,13 @@ function App() {
     }
   }
 
-  // 1. Listen to the microphone
   function startListening() {
-    const SpeechRecognition =
-      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
-
-    if (!SpeechRecognition) {
+    const recognition = getRecognizer()
+    if (!recognition) {
       setReply('Voice input does not work in this browser. Please use Chrome.')
       return
     }
 
-    const recognition = new SpeechRecognition()
     recognition.lang = 'en-US'
     recognition.interimResults = true
     recognition.continuous = false
@@ -97,6 +184,13 @@ function App() {
   }
 
   function handleClick() {
+    // Sleeping? A click wakes her up too
+    if (!awake) {
+      stopWakeListener()
+      wakeUp()
+      return
+    }
+
     if (status === 'standby') {
       setReply('')
       startListening()
@@ -108,7 +202,6 @@ function App() {
     }
   }
 
-  // Upcoming plans, soonest first
   const upcoming = [...agenda]
     .filter((item) => new Date(item.start) >= new Date(new Date().toDateString()))
     .sort((a, b) => a.start.localeCompare(b.start))
@@ -133,9 +226,13 @@ function App() {
         ))}
       </aside>
 
+      <button className={`wake-toggle ${wakeMode ? 'on' : ''}`} onClick={toggleWakeMode}>
+        {wakeMode ? '● "Hey Astha" is on' : '○ Turn on "Hey Astha"'}
+      </button>
+
       <p className="brand">Mini Astha</p>
 
-      <button className="orb" onClick={handleClick} aria-label="Talk to Mini Astha">
+      <button className={`orb ${awake ? '' : 'asleep'}`} onClick={handleClick} aria-label="Talk to Mini Astha">
         <div className="ring ring-outer"></div>
         <div className="ring ring-dashed"></div>
         <div className="ring ring-arc"></div>
@@ -164,12 +261,13 @@ function App() {
         <div className="core"></div>
       </button>
 
-      <p className="status">{status.toUpperCase()}</p>
+      <p className="status">{awake ? status.toUpperCase() : 'SLEEPING'}</p>
 
       <div className="transcript">
-        {status === 'standby' && !heard && !reply && <p className="hint">Click the core and speak</p>}
-        {heard && <p className="heard">“{heard}”</p>}
-        {reply && <p className="reply">{reply}</p>}
+        {!awake && <p className="hint">Say “Hey Astha” to wake me</p>}
+        {awake && status === 'standby' && !heard && !reply && <p className="hint">Click the core and speak</p>}
+        {awake && heard && <p className="heard">“{heard}”</p>}
+        {awake && reply && <p className="reply">{reply}</p>}
       </div>
     </div>
   )

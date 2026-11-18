@@ -250,3 +250,35 @@
   font-size: 13px;
   color: #9fb0cf;
 }
+/* ---------- Wake word: sleep / appear ---------- */
+.orb {
+  transition: transform 0.7s cubic-bezier(0.2, 1.4, 0.4, 1), opacity 0.7s ease;
+}
+
+.orb.asleep {
+  transform: scale(0.18);
+  opacity: 0.35;
+}
+
+.orb.asleep .signal {
+  display: none;
+}
+
+.wake-toggle {
+  position: fixed;
+  left: 24px;
+  bottom: 24px;
+  border: 1px solid rgba(56, 225, 255, 0.25);
+  background: transparent;
+  color: #7e8aa8;
+  border-radius: 999px;
+  padding: 10px 16px;
+  font-size: 13px;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+}
+
+.wake-toggle.on {
+  border-color: #38e1ff;
+  color: #38e1ff;
+}
