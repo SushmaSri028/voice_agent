@@ -1,0 +1,252 @@
+.screen {
+  min-height: 100vh;
+  background: #04050d;
+  color: #e6f7ff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 32px;
+  font-family: system-ui, sans-serif;
+}
+
+.brand {
+  margin: 0;
+  font-size: 14px;
+  letter-spacing: 0.3em;
+  color: #38e1ff;
+}
+
+.core {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #f2feff 0%, #38e1ff 40%, transparent 70%);
+  box-shadow: 0 0 60px #38e1ff;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.15); }
+}
+
+.status {
+  margin: 0;
+  font-size: 14px;
+  letter-spacing: 0.4em;
+  color: #38e1ff;
+}
+
+/* ---------- Rings ---------- */
+
+.orb {
+  position: relative;
+  width: 360px;
+  height: 360px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ring {
+  position: absolute;
+  border-radius: 50%;
+}
+
+/* 1. Still outer circle */
+.ring-outer {
+  inset: 0;
+  border: 1px solid rgba(56, 225, 255, 0.2);
+}
+
+/* 2. Dashed ring – slow spin */
+.ring-dashed {
+  inset: 16px;
+  border: 2px dashed rgba(56, 225, 255, 0.45);
+  animation: spin 30s linear infinite;
+}
+
+/* 3. Bright half-arc – fast spin */
+.ring-arc {
+  inset: 40px;
+  border: 4px solid transparent;
+  border-top-color: #38e1ff;
+  border-right-color: #38e1ff;
+  animation: spin 6s linear infinite;
+}
+
+/* 4. Thin arc – spins the other way */
+.ring-arc-reverse {
+  inset: 64px;
+  border: 2px solid transparent;
+  border-bottom-color: rgba(56, 225, 255, 0.7);
+  border-left-color: rgba(56, 225, 255, 0.7);
+  animation: spin 10s linear infinite reverse;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+/* ---------- Electron orbits ---------- */
+
+.orbit {
+  position: absolute;
+  width: 280px;
+  height: 280px;
+}
+
+.orbit-spin {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  border: 2px solid rgba(56, 225, 255, 0.35);
+  animation: spin 6s linear infinite;
+}
+
+.electron {
+  position: absolute;
+  top: -7px;
+  left: 50%;
+  width: 14px;
+  height: 14px;
+  margin-left: -7px;
+  border-radius: 50%;
+  background: #f2feff;
+  box-shadow: 0 0 12px #38e1ff, 0 0 24px #38e1ff;
+}
+
+/* ---------- Orb is now a button ---------- */
+.orb {
+  border: none;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+}
+
+/* ---------- Signal waves ---------- */
+.signal {
+  position: absolute;
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  border: 2px solid #38e1ff;
+  opacity: 0;
+}
+
+.listening .signal,
+.speaking .signal {
+  animation: signal 1.8s ease-out infinite;
+}
+.signal-2 { animation-delay: 0.6s !important; }
+.signal-3 { animation-delay: 1.2s !important; }
+
+@keyframes signal {
+  0%   { transform: scale(1);   opacity: 0.8; }
+  100% { transform: scale(2.8); opacity: 0; }
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.4; }
+}
+
+/* ---------- LISTENING ---------- */
+.listening .ring-arc    { animation-duration: 3s; }
+.listening .ring-dashed { animation-duration: 15s; }
+.listening .status      { color: #ff5c7a; }
+
+/* ---------- THINKING ---------- */
+.thinking .orb              { filter: hue-rotate(60deg); }
+.thinking .ring-arc         { animation-duration: 0.8s; }
+.thinking .ring-arc-reverse { animation-duration: 1.2s; }
+.thinking .core             { animation: pulse 0.6s ease-in-out infinite; }
+.thinking .status           { color: #a78bfa; }
+
+/* ---------- SPEAKING ---------- */
+.speaking .ring-arc { animation-duration: 2s; }
+.speaking .core {
+  animation: pulse 0.8s ease-in-out infinite, blink 0.7s ease-in-out infinite;
+}
+
+/* ---------- Transcript ---------- */
+.transcript {
+  min-height: 90px;
+  max-width: 600px;
+  padding: 0 24px;
+  text-align: center;
+}
+
+.hint {
+  margin: 0;
+  font-size: 14px;
+  color: #7e8aa8;
+}
+
+.heard {
+  margin: 0 0 10px;
+  font-size: 16px;
+  color: #7e8aa8;
+}
+
+.reply {
+  margin: 0;
+  font-size: 20px;
+  line-height: 1.5;
+  color: #e6f7ff;
+}
+
+/* ---------- Agenda panel ---------- */
+.agenda {
+  position: fixed;
+  top: 24px;
+  right: 24px;
+  width: 260px;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  border: 1px solid rgba(56, 225, 255, 0.22);
+  border-radius: 14px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: rgba(4, 5, 13, 0.85);
+}
+
+.agenda-title {
+  margin: 0;
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  color: #7e8aa8;
+}
+
+.agenda-empty {
+  margin: 0;
+  font-size: 14px;
+  color: #7e8aa8;
+}
+
+.agenda-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(56, 225, 255, 0.12);
+}
+
+.agenda-time {
+  font-size: 12px;
+  color: #38e1ff;
+}
+
+.agenda-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: #e6f7ff;
+}
+
+.agenda-place {
+  font-size: 13px;
+  color: #9fb0cf;
+}
