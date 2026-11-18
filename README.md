@@ -1,32 +1,112 @@
-# React + TypeScript + Vite
+# Mini Astha 🎙️
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+A voice-first AI assistant with an animated "energy core" interface. Talk to it, and it listens, thinks and answers out loud. It can also manage your schedule: add plans, read them back and cancel them, always asking before it changes anything.
 
-Currently, two official plugins are available:
+> Built step by step as a learning project with React, TypeScript and an AI agent that uses tools.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Features
 
-## React Compiler
+- **Animated voice core:** rotating rings, orbiting electrons and signal waves that react to each state (standby, listening, thinking, speaking)
+- **Speech in, speech out:** uses the browser's built-in speech recognition and text-to-speech
+- **AI brain:** powered by Groq (`openai/gpt-oss-20b`) through a small Node server, so the API key never reaches the browser
+- **Agenda tools (function calling):** the AI can `add_event`, `list_events` and `delete_event`, and confirms before saving or deleting
+- **Hands-free follow-up:** when the assistant asks a question, the mic turns on automatically for your answer
+- **Conversation memory:** remembers the last 10 messages for follow-up questions
+- **Upcoming panel:** shows your saved plans, soonest first
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## How it works
 
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```
+Browser (React)                Node server                 Groq AI
+───────────────                ───────────                 ───────
+🎤 Speech → text   ──/api/chat──►  adds system prompt  ──►  decides: answer
+🔊 Text → speech   ◄── reply ───  runs tools          ◄──  or use a tool
+📋 Upcoming list   ◄─ agenda ──   agenda.json
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+## Tech stack
+
+| Part | Technology |
+|---|---|
+| UI | React, TypeScript, CSS animations |
+| Build tool | Vite |
+| Voice | Web Speech API (SpeechRecognition + SpeechSynthesis) |
+| Server | Node.js (built-in `http`, `fs`) |
+| AI | Groq API with tool calling |
+| Storage | Local JSON file (`agenda.json`) |
+
+## Getting started
+
+### Requirements
+
+- [Node.js](https://nodejs.org) 20.6 or newer
+- A free [Groq API key](https://console.groq.com)
+- Google Chrome (best support for voice input)
+
+### Setup
+
+```bash
+git clone https://github.com/SushmaSri028/voice_agent.git
+cd voice_agent
+npm install
+```
+
+Create a `.env` file in the project root:
+
+```
+GROQ_API_KEY=your_key_here
+```
+
+### Run
+
+Open two terminals:
+
+```bash
+# Terminal 1 – AI brain (server)
+node --env-file=.env server.js
+```
+
+```bash
+# Terminal 2 – app
+npm run dev
+```
+
+Open http://localhost:5173 in Chrome, click the core and start talking.
+
+## Try saying
+
+- "Add physics lecture tomorrow at 10 am in room 204" → "Yes"
+- "What do I have tomorrow?"
+- "Cancel the physics lecture"
+- "Give me a tip to focus while studying"
+
+## Project structure
+
+```
+voice_agent/
+├── server.js        # Node server: AI brain, tools, agenda storage
+├── src/
+│   ├── App.tsx      # Voice flow, states, agenda panel
+│   ├── App.css      # Core animations and styles
+│   └── main.tsx     # React entry point
+├── vite.config.ts   # Proxies /api to the server
+└── .env             # Your API key (not committed)
+```
+
+## Roadmap
+
+- [ ] Reminders before each plan (notifications + spoken alert)
+- [ ] Reschedule plans (`update_event` tool)
+- [ ] Recurring plans (every Monday, weekdays…)
+- [ ] Telugu / Tenglish voice support
+- [ ] Desktop app with Electron and a global shortcut
+- [ ] Mobile app with React Native
+
+## Security
+
+- The Groq API key lives only in `.env` on the server and is listed in `.gitignore`.
+- `agenda.json` (personal plans) is also ignored.
+
+## Author
+
+**Sushma Sri Kondamareddy**: [GitHub](https://github.com/SushmaSri028)
