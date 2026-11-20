@@ -1,8 +1,26 @@
 import http from 'node:http'
 import fs from 'node:fs'
+import { execFile } from 'node:child_process'
 
 const FILE = './agenda.json'
-const MODEL = 'openai/gpt-oss-20b'
+const MODEL = 'openai/gpt-oss-120b'
+
+// Only these can be opened. Add your own!
+const WEBSITES = {
+  gmail: 'https://mail.google.com',
+  calendar: 'https://calendar.google.com',
+  youtube: 'https://www.youtube.com',
+  linkedin: 'https://www.linkedin.com',
+  github: 'https://github.com/SushmaSri028',
+  groq: 'https://console.groq.com',
+}
+
+const APPS = {
+  vscode: 'Visual Studio Code',
+  notes: 'Notes',
+  calculator: 'Calculator',
+  chrome: 'Google Chrome',
+}
 
 // ---------- Agenda storage (a simple JSON file) ----------
 function loadAgenda() {
@@ -27,6 +45,10 @@ const tools = [
           title: { type: 'string', description: 'Short name, e.g. Physics lecture' },
           start: { type: 'string', description: 'Local date and time, format YYYY-MM-DDTHH:mm' },
           location: { type: 'string' },
+          remindBefore: {
+            type: 'number',
+            description: 'Minutes before start to remind the user. Default 10.',
+          },
         },
         required: ['title', 'start'],
       },
@@ -52,13 +74,50 @@ const tools = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'open_thing',
+      description: 'Open a website or a Mac app for the user.',
+      parameters: {
+        type: 'object',
+        properties: {
+          target: {
+            type: 'string',
+            enum: [...Object.keys(WEBSITES), ...Object.keys(APPS)],
+          },
+        },
+        required: ['target'],
+      },
+    },
+  },
 ]
 
 function runTool(name, args) {
+  // 1. Open a website or app (checked first)
+  if (name === 'open_thing') {
+    if (WEBSITES[args.target]) {
+      execFile('open', ['-a', 'Google Chrome', WEBSITES[args.target]])
+      return { opened: args.target }
+    }
+    if (APPS[args.target]) {
+      execFile('open', ['-a', APPS[args.target]])
+      return { opened: args.target }
+    }
+    return { error: 'Not allowed' }
+  }
+
+  // 2. Agenda tools
   const items = loadAgenda()
 
   if (name === 'add_event') {
-    const item = { id: Date.now(), title: args.title, start: args.start, location: args.location || '' }
+    const item = {
+      id: Date.now(),
+      title: args.title,
+      start: args.start,
+      location: args.location || '',
+      remindBefore: args.remindBefore ?? 10,
+    }
     items.push(item)
     saveAgenda(items)
     return { saved: item }
@@ -74,6 +133,7 @@ function runTool(name, args) {
     return { deleted: left.length !== items.length }
   }
 
+  // 3. Anything else
   return { error: 'Unknown tool' }
 }
 
@@ -86,7 +146,7 @@ function nowLocal() {
 }
 
 function systemPrompt() {
-  return `You are Mini Astha, a friendly voice assistant that manages the user's schedule.
+  return `You are Mini Astha, a friendly voice assistant that manages the user's schedule. The user's name is Sri.
 The current local date and time is ${nowLocal()}.
 
 Rules:
@@ -94,10 +154,12 @@ Rules:
 - Use the tools to read and change the agenda. Never invent events.
 - Before adding: repeat the title, day and time, then ask "Should I save it?". Call add_event only after the user says yes.
 - Before deleting: call list_events to find the id, ask the user to confirm, and call delete_event only after they say yes.
-- If the time or day is missing, ask for it.`
+- If the time or day is missing, ask for it.
+- If the user says "remind me X minutes before", pass remindBefore. Otherwise reminders are 10 minutes before.
+- You can open websites and Mac apps with open_thing. Do it right away without asking, then say what you opened.`
 }
 
-async function askGroq(messages) {
+async function askGroq(messages, retries = 1) {
   const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -107,7 +169,13 @@ async function askGroq(messages) {
     body: JSON.stringify({ model: MODEL, messages, tools }),
   })
   const data = await res.json()
+
   if (!res.ok) {
+    // The model sometimes writes a broken tool call: just ask again once
+    if (data.error?.code === 'tool_use_failed' && retries > 0) {
+      console.log('Tool call glitch, retrying…')
+      return askGroq(messages, retries - 1)
+    }
     console.error('Groq error:', data)
     throw new Error('Groq request failed')
   }
@@ -115,6 +183,21 @@ async function askGroq(messages) {
 }
 
 async function chat(messages) {
+  // Fast path: "open gmail", "open my github", "open VS Code" – no AI needed
+  const lastText = (messages[messages.length - 1]?.content || '')
+    .toLowerCase()
+    .replace(/[.!?,]/g, '')
+  const match = lastText.match(/^(?:please\s+)?(?:open|launch|start)\s+(?:my\s+|the\s+)?(.+)$/)
+  if (match) {
+    const target = match[1].trim().replace(/\s+/g, '') // "vs code" -> "vscode"
+    if (WEBSITES[target] || APPS[target]) {
+      const result = runTool('open_thing', { target })
+      console.log('Quick command:', target)
+      if (result.error) return "Sorry, I can't open that."
+      return `Opening ${target}.`
+    }
+  }
+
   const convo = [{ role: 'system', content: systemPrompt() }, ...messages]
 
   // The AI may use several tools before it answers
@@ -127,11 +210,18 @@ async function chat(messages) {
 
     convo.push({ role: 'assistant', content: msg.content || '', tool_calls: msg.tool_calls })
 
+    const opened = []
     for (const call of msg.tool_calls) {
       const args = JSON.parse(call.function.arguments || '{}')
       const result = runTool(call.function.name, args)
       console.log('Tool used:', call.function.name, args)
+      if (result.opened) opened.push(result.opened)
       convo.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify(result) })
+    }
+
+    // Opening apps needs no follow-up from the AI: answer right away
+    if (opened.length === msg.tool_calls.length) {
+      return `Opening ${opened.join(' and ')}.`
     }
   }
   return 'Sorry, that took too many steps. Please try again.'
