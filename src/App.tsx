@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import './App.css'
 
 type Status = 'standby' | 'listening' | 'thinking' | 'speaking'
-type AgendaItem = { id: number; title: string; start: string; location: string }
+type AgendaItem = { id: number; title: string; start: string; location: string; remindBefore?: number }
 
 // Very forgiving check, based on what Chrome actually heard:
 // "hey hasta", "hey hast", "hey astha", "hasta", "hairst", "hairstyle"...
@@ -35,6 +35,9 @@ function App() {
   const wakeRecognitionRef = useRef<any>(null)
   const wakeModeRef = useRef(false)
   const historyRef = useRef<{ role: 'user' | 'assistant'; content: string }[]>([])
+    const remindedRef = useRef<Set<number>>(
+    new Set(JSON.parse(localStorage.getItem('reminded') || '[]'))
+  )
 
   // Load saved plans when the app opens
   useEffect(() => {
@@ -45,6 +48,45 @@ function App() {
   }, [])
 
   // Wake-word mode: after 8 quiet seconds, go to sleep and wait for "Hey Astha"
+    // Reminders: every 15 seconds, check if a plan is coming up
+  useEffect(() => {
+    function checkReminders() {
+      if (status !== 'standby') return // don't interrupt a conversation
+
+      const now = Date.now()
+      for (const item of agenda) {
+        const start = new Date(item.start).getTime()
+        const before = (item.remindBefore ?? 10) * 60 * 1000
+        const isDue = now >= start - before && now < start
+
+        if (isDue && !remindedRef.current.has(item.id)) {
+          remindedRef.current.add(item.id)
+          localStorage.setItem('reminded', JSON.stringify([...remindedRef.current]))
+
+          const mins = Math.max(1, Math.round((start - now) / 60000))
+          const place = item.location ? ` at ${item.location}` : ''
+          const message = `Sri, ${item.title} starts in ${mins} minute${mins === 1 ? '' : 's'}${place}.`
+
+          // 1. Mac notification
+          if ('Notification' in window && Notification.permission === 'granted') {
+            new Notification('Mini Astha', { body: message })
+          }
+
+          // 2. Wake up if sleeping, then say it out loud
+          if (!awake) {
+            stopWakeListener()
+            setAwake(true)
+          }
+          speak(message)
+          return // one reminder at a time
+        }
+      }
+    }
+
+    checkReminders()
+    const timer = setInterval(checkReminders, 15000)
+    return () => clearInterval(timer)
+  }, [agenda, status, awake])
   useEffect(() => {
     if (!wakeMode || !awake || status !== 'standby') return
     const timer = setTimeout(() => {
@@ -102,6 +144,9 @@ function App() {
   }
 
   function toggleWakeMode() {
+        if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission()
+    }
     if (wakeModeRef.current) {
       wakeModeRef.current = false
       setWakeMode(false)
@@ -184,6 +229,9 @@ function App() {
   }
 
   function handleClick() {
+        if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission()
+    }
     // Sleeping? A click wakes her up too
     if (!awake) {
       stopWakeListener()
