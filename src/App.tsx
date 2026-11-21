@@ -11,6 +11,7 @@ type AgendaItem = {
   remindBefore?: number
   repeat?: 'none' | 'daily' | 'weekdays' | 'weekly'
 }
+type Weather = { city: string; temp: number; feelsLike: number; condition: string; high: number; low: number; rainChance: number; wind: number };
 
 // Very forgiving check, based on what Chrome actually heard:
 // "hey hasta", "hey hast", "hey astha", "hasta", "hairst", "hairstyle"...
@@ -56,6 +57,7 @@ function App() {
   const [agenda, setAgenda] = useState<AgendaItem[]>([])
   const [awake, setAwake] = useState(true)
   const [wakeMode, setWakeMode] = useState(false)
+  const [weather, setWeather] = useState<Weather | null>(null)   // ← add
 
   const recognitionRef = useRef<any>(null)
   const wakeRecognitionRef = useRef<any>(null)
@@ -67,6 +69,14 @@ function App() {
       const remindedRef = useRef<Set<string>>(
     new Set(JSON.parse(localStorage.getItem('reminded') || '[]'))
   )
+  function weatherIcon(c: string) {
+  if (c.includes('thunder')) return '⛈️';
+  if (c.includes('rain') || c.includes('drizzle') || c.includes('shower')) return '🌧️';
+  if (c.includes('fog')) return '🌫️';
+  if (c.includes('partly')) return '⛅';
+  if (c.includes('cloud')) return '☁️';
+  return '☀️';
+}
 
   // Load saved plans when the app opens
   useEffect(() => {
@@ -229,7 +239,8 @@ function App() {
       })
       const data = await res.json()
       historyRef.current.push({ role: 'assistant', content: data.reply })
-      setAgenda(data.agenda)
+            setAgenda(data.agenda)
+      if (data.weather) setWeather(data.weather)   // ← add
       speak(data.reply)
     } catch {
       speak('Sorry, I could not reach my brain. Is the server running?')
@@ -330,7 +341,20 @@ function App() {
             )}
           </div>
         ))}
-      </aside>
+            </aside>
+
+      {weather && (
+        <div className="weather-card">
+          <button className="weather-close" onClick={() => setWeather(null)}>×</button>
+          <div className="weather-icon">{weatherIcon(weather.condition)}</div>
+          <div className="weather-temp">{weather.temp}°F</div>
+          <div className="weather-city">{weather.city} · {weather.condition}</div>
+          <div className="weather-meta">
+            H {weather.high}° · L {weather.low}° · 🌧 {weather.rainChance}% · 💨 {weather.wind} mph
+          </div>
+        </div>
+      )}
+      
 
       <button className={`wake-toggle ${wakeMode ? 'on' : ''}`} onClick={toggleWakeMode}>
         {wakeMode ? '● "Hey Astha" is on' : '○ Turn on "Hey Astha"'}
