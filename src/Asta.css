@@ -1,0 +1,226 @@
+/* Asta runs along the bottom of the screen. translateX, --mouth, --look-x/y are set from JS. */
+.asta {
+  --mouth: 0;
+  --look-x: 0;
+  --look-y: 0;
+  position: fixed;
+  left: 0;
+  bottom: 64px;
+  width: 180px;
+  height: 260px;
+  z-index: 5;
+  cursor: pointer;
+  user-select: none;
+  will-change: transform;
+}
+
+.asta-flip {
+  width: 100%;
+  height: 100%;
+  transition: transform 0.2s ease;
+}
+
+.asta-svg {
+  overflow: visible;
+  filter: drop-shadow(0 0 14px rgba(255, 110, 40, 0.25));
+}
+
+/* SVG parts move around points in the drawing's own coordinates */
+.asta-svg g,
+.asta-svg path,
+.asta-svg ellipse,
+.asta-svg circle {
+  transform-box: view-box;
+}
+.asta-svg .body { transform-origin: 90px 248px; animation: asta-idle 2.6s ease-in-out infinite; }
+.asta-svg .upper { transform-origin: 90px 200px; }
+.asta-svg .head { transform-origin: 90px 140px; transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1); animation: asta-head-idle 5s ease-in-out infinite; }
+.asta-svg .leg-l { transform-origin: 77px 198px; }
+.asta-svg .leg-r { transform-origin: 103px 198px; }
+.asta-svg .arm-l { transform-origin: 52px 150px; transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); animation: asta-arm-sway 2.6s ease-in-out infinite; }
+.asta-svg .arm-r { transform-origin: 128px 150px; transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); animation: asta-arm-sway 2.6s ease-in-out infinite reverse; }
+.asta-svg .scarf-tail { transform-origin: 72px 142px; animation: asta-scarf 1.6s ease-in-out infinite; }
+.asta-svg .fringe { transform-origin: 90px 74px; animation: asta-fringe 2.6s ease-in-out infinite; }
+
+/* Each hair spike sways on its own (delay set per spike) */
+.asta-svg .spike { animation: asta-spike 2.2s ease-in-out infinite; }
+
+/* Eyes follow the mouse */
+.asta-svg .iris {
+  transform: translate(calc(var(--look-x) * 3.5px), calc(var(--look-y) * 2.5px));
+  transition: transform 0.12s ease-out;
+}
+.asta-svg .eyelids rect {
+  transform-box: fill-box;
+  transform-origin: top;
+  transform: scaleY(0);
+  animation: asta-blink 5s infinite;
+}
+.asta-svg .eyelids rect + rect { animation-delay: 0.02s; }
+.asta-svg .eyes-closed { display: none; }
+.asta-svg .brows { transform-origin: 90px 86px; transition: transform 0.25s ease; }
+
+/* Mouth follows --mouth from the lip-sync loop */
+.asta-svg .mouth-open {
+  transform-box: fill-box;
+  transform-origin: center top;
+  transform: scaleY(var(--mouth));
+  opacity: calc(var(--mouth) * 4);
+}
+.asta-svg .smile { opacity: calc(1 - var(--mouth) * 4); }
+
+.asta-svg .aura { opacity: 0; transition: opacity 0.4s ease; }
+.asta-svg .flame { transform-origin: 90px 250px; }
+.asta-svg .dust { opacity: 0; }
+.asta-svg .listen-waves { opacity: 0; }
+.asta-svg .shadow { transform-origin: 90px 250px; }
+
+/* ---------- Running ---------- */
+.asta.walking .body { animation: asta-run 0.34s ease-in-out infinite; }
+.asta.walking .leg-l { animation: asta-step 0.68s ease-in-out infinite; }
+.asta.walking .leg-r { animation: asta-step 0.68s ease-in-out infinite reverse; }
+.asta.walking .arm-l { animation: asta-pump-arm 0.68s ease-in-out infinite reverse; }
+.asta.walking .arm-r { animation: asta-pump-arm 0.68s ease-in-out infinite; }
+.asta.walking .spike { animation-duration: 0.5s; }
+.asta.walking .scarf-tail { animation: asta-scarf-run 0.34s ease-in-out infinite; }
+.asta.walking .dust-1 { animation: asta-dust 0.68s ease-out infinite; }
+.asta.walking .dust-2 { animation: asta-dust 0.68s ease-out infinite 0.34s; }
+
+/* ---------- Moods ---------- */
+.asta.mood-listening .body { animation: asta-hop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 1, asta-idle 2.6s ease-in-out 0.5s infinite; }
+.asta.mood-listening .head { animation: none; transform: rotate(-7deg) translateY(2px); }
+.asta.mood-listening .eye { transform-box: fill-box; transform-origin: center; transform: scale(1.12); }
+.asta.mood-listening .brows { transform: translateY(-4px); }
+.asta.mood-listening .listen-waves { opacity: 1; animation: asta-pulse 0.9s ease-in-out infinite; }
+
+.asta.mood-thinking .head { animation: none; transform: rotate(9deg); }
+.asta.mood-thinking .brows { transform: translateY(2px) rotate(-3deg); }
+.asta.mood-thinking .arm-l { animation: none; transform: rotate(150deg); } /* scratches his head */
+
+.asta.mood-speaking .aura { opacity: 0.55; }
+.asta.mood-speaking .flame-1 { animation: asta-flicker 0.45s ease-in-out infinite; }
+.asta.mood-speaking .flame-2 { animation: asta-flicker 0.32s ease-in-out infinite reverse; }
+.asta.mood-speaking .head { animation: asta-nod 0.6s ease-in-out infinite; }
+.asta.mood-speaking .brows { animation: asta-brows 0.9s ease-in-out infinite; }
+.asta.mood-speaking .arm-r { animation: asta-gesture 1.8s ease-in-out infinite; }
+
+.asta.mood-sleeping .body { animation: asta-idle 5s ease-in-out infinite; }
+.asta.mood-sleeping .head { animation: none; transform: rotate(12deg) translateY(7px); }
+.asta.mood-sleeping .eyes-open { display: none; }
+.asta.mood-sleeping .eyes-closed { display: inline; }
+.asta.mood-sleeping .spike { animation-duration: 5s; }
+.asta.mood-sleeping { filter: saturate(0.55) brightness(0.8); }
+
+/* Woken up / fired up: fist pump with a flare of fire */
+.asta.waving .aura { opacity: 0.95; }
+.asta.waving .flame-1 { animation: asta-flicker 0.25s ease-in-out infinite; }
+.asta.waving .flame-2 { animation: asta-flicker 0.2s ease-in-out infinite reverse; }
+.asta.waving .arm-r { animation: asta-fist-pump 0.4s ease-in-out infinite; }
+.asta.waving .brows { transform: translateY(-4px); }
+.asta.waving .body { animation: asta-jump 0.8s cubic-bezier(0.34, 1.3, 0.64, 1) 1; }
+
+/* ---------- Random idle moves (set from JS) ---------- */
+.asta.act-jump .body { animation: asta-jump 0.8s cubic-bezier(0.34, 1.3, 0.64, 1) 1; }
+.asta.act-jump .shadow { animation: asta-shadow 0.8s ease-in-out 1; }
+.asta.act-stretch .arm-l { animation: none; transform: rotate(165deg); }
+.asta.act-stretch .arm-r { animation: none; transform: rotate(-165deg); }
+.asta.act-stretch .body { animation: asta-stretch 1.4s ease-in-out 1; }
+.asta.act-stretch .eyes-open { display: none; }
+.asta.act-stretch .eyes-closed { display: inline; }
+.asta.act-pump .arm-r { animation: asta-fist-pump 0.4s ease-in-out 3; }
+.asta.act-pump .aura { opacity: 0.6; }
+.asta.act-pump .flame-1 { animation: asta-flicker 0.3s ease-in-out infinite; }
+
+/* ---------- Bubbles ---------- */
+.asta-bubble,
+.asta-zzz {
+  position: absolute;
+  left: 50%;
+  top: -18px;
+  transform: translateX(-50%);
+  color: #ff7a1a;
+  font-weight: 700;
+  pointer-events: none;
+}
+.asta-bubble {
+  background: rgba(16, 22, 42, 0.9);
+  border: 1px solid rgba(255, 122, 26, 0.5);
+  border-radius: 14px;
+  padding: 2px 14px 8px;
+  font-size: 22px;
+  animation: asta-pulse 1.2s ease-in-out infinite;
+}
+.asta-zzz {
+  font-size: 18px;
+  letter-spacing: 0.2em;
+  animation: asta-float 2.4s ease-in-out infinite;
+}
+
+/* ---------- Keyframes ---------- */
+@keyframes asta-idle { 0%, 100% { transform: scale(1, 1); } 50% { transform: scale(1.012, 0.988); } }
+@keyframes asta-head-idle { 0%, 100% { transform: rotate(0deg); } 30% { transform: rotate(-2deg); } 70% { transform: rotate(2deg); } }
+@keyframes asta-arm-sway { 0%, 100% { transform: rotate(0deg); } 50% { transform: rotate(4deg); } }
+@keyframes asta-spike { 0%, 100% { transform: rotate(-3deg); } 50% { transform: rotate(4deg); } }
+@keyframes asta-fringe { 0%, 100% { transform: rotate(0deg) translateY(0); } 50% { transform: rotate(1deg) translateY(1px); } }
+@keyframes asta-blink { 0%, 92%, 100% { transform: scaleY(0); } 94%, 95% { transform: scaleY(1); } 96.5% { transform: scaleY(0); } 97.5% { transform: scaleY(1); } }
+@keyframes asta-run {
+  0%, 100% { transform: translateY(0) rotate(7deg) scale(1.03, 0.97); }
+  50% { transform: translateY(-9px) rotate(7deg) scale(0.97, 1.03); }
+}
+@keyframes asta-step { 0%, 100% { transform: rotate(32deg); } 50% { transform: rotate(-32deg); } }
+@keyframes asta-pump-arm { 0%, 100% { transform: rotate(40deg); } 50% { transform: rotate(-40deg); } }
+@keyframes asta-scarf { 0%, 100% { transform: rotate(0deg); } 50% { transform: rotate(-10deg); } }
+@keyframes asta-scarf-run { 0%, 100% { transform: rotate(-22deg) scaleX(1.15); } 50% { transform: rotate(-30deg) scaleX(1.25); } }
+@keyframes asta-dust {
+  0% { opacity: 0.7; transform: translate(0, 0) scale(0.4); }
+  100% { opacity: 0; transform: translate(-22px, -10px) scale(1.6); }
+}
+@keyframes asta-hop {
+  0% { transform: scale(1.1, 0.88); }
+  40% { transform: translateY(-22px) scale(0.94, 1.08); }
+  75% { transform: translateY(0) scale(1.08, 0.92); }
+  100% { transform: scale(1, 1); }
+}
+@keyframes asta-jump {
+  0% { transform: scale(1, 1); }
+  15% { transform: scale(1.14, 0.84); }
+  45% { transform: translateY(-46px) scale(0.92, 1.1); }
+  75% { transform: translateY(0) scale(1.12, 0.88); }
+  100% { transform: scale(1, 1); }
+}
+@keyframes asta-shadow { 0%, 100% { transform: scale(1); opacity: 1; } 45% { transform: scale(0.6); opacity: 0.5; } }
+@keyframes asta-stretch {
+  0%, 100% { transform: scale(1, 1); }
+  40%, 70% { transform: scale(0.96, 1.06) translateY(-3px); }
+}
+@keyframes asta-nod { 0%, 100% { transform: rotate(-1.5deg) translateY(0); } 50% { transform: rotate(1.5deg) translateY(1.5px); } }
+@keyframes asta-brows { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+@keyframes asta-gesture {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(-55deg); }
+  50% { transform: rotate(-35deg); }
+  75% { transform: rotate(-60deg); }
+}
+@keyframes asta-flicker {
+  0%, 100% { transform: scale(1, 1); opacity: 0.85; }
+  50% { transform: scale(1.06, 1.12); opacity: 1; }
+}
+@keyframes asta-fist-pump { 0%, 100% { transform: rotate(-170deg); } 50% { transform: rotate(-140deg) translateY(-5px); } }
+@keyframes asta-pulse { 0%, 100% { opacity: 0.5; } 50% { opacity: 1; } }
+@keyframes asta-float {
+  0%, 100% { transform: translate(-50%, 0); opacity: 0.6; }
+  50% { transform: translate(-50%, -8px); opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .asta *, .asta { animation: none !important; transition: none !important; }
+}
+
+/* Keep the corner buttons clickable above Asta */
+.wake-toggle,
+.gmail-connect { z-index: 6; }
+
+/* Smaller Asta on phones */
+@media (max-width: 600px) {
+  .asta { scale: 0.7; transform-origin: bottom left; bottom: 70px; }
+}

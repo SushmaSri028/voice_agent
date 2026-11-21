@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import './App.css'
+import Asta from './Asta'
 
 type Status = 'standby' | 'listening' | 'thinking' | 'speaking'
 type AgendaItem = {
@@ -59,6 +60,9 @@ function App() {
   const recognitionRef = useRef<any>(null)
   const wakeRecognitionRef = useRef<any>(null)
   const wakeModeRef = useRef(false)
+  const [gmail, setGmail] = useState<{ configured: boolean; connected: boolean } | null>(null)
+  const mouthRef = useRef(0) // Asta's lip-sync: set to 1 on every spoken word
+  const [waveKey, setWaveKey] = useState(0)
   const historyRef = useRef<{ role: 'user' | 'assistant'; content: string }[]>([])
       const remindedRef = useRef<Set<string>>(
     new Set(JSON.parse(localStorage.getItem('reminded') || '[]'))
@@ -69,6 +73,10 @@ function App() {
     fetch('/api/agenda')
       .then((res) => res.json())
       .then((data) => setAgenda(data.agenda))
+      .catch(() => {})
+    fetch('/api/gmail/status')
+      .then((res) => res.json())
+      .then(setGmail)
       .catch(() => {})
   }, [])
 
@@ -165,6 +173,7 @@ function App() {
 
   function wakeUp() {
     setAwake(true)
+    setWaveKey((k) => k + 1) // Asta waves hello
     setHeard('')
     setReply('')
     speak('Yes?') // ends with "?" so the mic turns on for your command
@@ -190,6 +199,17 @@ function App() {
     setStatus('speaking')
     setReply(text)
     const utterance = new SpeechSynthesisUtterance(text)
+    // Asta's voice: an English male voice if the computer has one, fast and fired up
+    const voices = window.speechSynthesis.getVoices()
+    const voice =
+      voices.find((v) => v.lang.startsWith('en') && /male|david|mark|guy|ravi|daniel/i.test(v.name) && !/female/i.test(v.name)) ||
+      voices.find((v) => v.lang.startsWith('en'))
+    if (voice) utterance.voice = voice
+    utterance.pitch = 1.2
+    utterance.rate = 1.12
+    utterance.onboundary = () => {
+      mouthRef.current = 1 // mouth pops open on each word
+    }
     utterance.onend = () => {
       if (text.trim().endsWith('?')) startListening()
       else setStatus('standby')
@@ -239,9 +259,15 @@ function App() {
     }
 
     recognition.onerror = (event: any) => {
-      if (event.error === 'not-allowed') {
-        setReply('Microphone is blocked. Allow it in the browser and try again.')
+      console.warn('Speech recognition error:', event.error)
+      const messages: Record<string, string> = {
+        'not-allowed': 'Microphone is blocked. Allow it in the browser and try again.',
+        'service-not-allowed': 'Microphone is blocked. Allow it in the browser and try again.',
+        'no-speech': 'I did not hear anything. Click the core and speak a bit louder.',
+        'audio-capture': 'No microphone found. Check that one is connected and selected.',
+        network: 'Speech recognition needs an internet connection. Check your network.',
       }
+      setReply(messages[event.error] || `Voice input error: ${event.error}`)
     }
 
     recognition.onend = () => {
@@ -310,6 +336,14 @@ function App() {
         {wakeMode ? '● "Hey Astha" is on' : '○ Turn on "Hey Astha"'}
       </button>
 
+      {gmail?.configured && !gmail.connected && (
+        // Opens Google's own sign-in page in a new tab (read-only access)
+        <a className="gmail-connect" href="http://localhost:3001/api/gmail/auth" target="_blank" rel="noreferrer">
+          ✉ Connect Gmail
+        </a>
+      )}
+      {gmail?.connected && <span className="gmail-connect on">✉ Gmail connected</span>}
+
       <p className="brand">Mini Astha</p>
 
       <button className={`orb ${awake ? '' : 'asleep'}`} onClick={handleClick} aria-label="Talk to Mini Astha">
@@ -340,6 +374,8 @@ function App() {
 
         <div className="core"></div>
       </button>
+
+      <Asta mood={awake ? status : 'sleeping'} mouth={mouthRef} waveKey={waveKey} onClick={handleClick} />
 
       <p className="status">{awake ? status.toUpperCase() : 'SLEEPING'}</p>
 

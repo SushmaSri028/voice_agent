@@ -24,3 +24,6 @@ dist-ssr
 *.sw?
 .env
 agenda.json
+
+# Gmail login token (private)
+gmail-token.json

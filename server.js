@@ -1,6 +1,7 @@
 import http from 'node:http'
 import fs from 'node:fs'
 import { execFile } from 'node:child_process'
+import { authUrl, finishSignIn, gmailConfigured, gmailConnected, listEmails, readEmail } from './gmail.js'
 
 const FILE = './agenda.json'
 const MODEL = 'openai/gpt-oss-120b'
@@ -46,14 +47,13 @@ const tools = [
           start: { type: 'string', description: 'Local date and time, format YYYY-MM-DDTHH:mm' },
           location: { type: 'string' },
           remindBefore: {
-                      repeat: {
+            type: 'number',
+            description: 'Minutes before start to remind the user. Default 10.',
+          },
+          repeat: {
             type: 'string',
             enum: ['none', 'daily', 'weekdays', 'weekly'],
             description: 'weekly repeats on the same weekday as start',
-          },
-
-            type: 'number',
-            description: 'Minutes before start to remind the user. Default 10.',
           },
         },
         required: ['title', 'start'],
@@ -106,6 +106,37 @@ const tools = [
   {
     type: 'function',
     function: {
+      name: 'check_email',
+      description:
+        "List the newest emails in Sri's Gmail inbox (sender, subject, date, short preview, id). Read-only.",
+      parameters: {
+        type: 'object',
+        properties: {
+          count: { type: 'number', description: 'How many emails, 1-10. Default 5.' },
+          unreadOnly: { type: 'boolean', description: 'Only unread emails' },
+          query: {
+            type: 'string',
+            description: 'Optional Gmail search, e.g. "from:amazon" or "subject:exam" or "newer_than:1d"',
+          },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'read_email',
+      description: 'Get the full text of one email by its id (from check_email). Read-only.',
+      parameters: {
+        type: 'object',
+        properties: { id: { type: 'string' } },
+        required: ['id'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'open_thing',
       description: 'Open a website or a Mac app for the user.',
       parameters: {
@@ -122,7 +153,20 @@ const tools = [
   },
 ]
 
-function runTool(name, args) {
+async function runTool(name, args) {
+  // 0. Email (read-only)
+  if (name === 'check_email' || name === 'read_email') {
+    if (!gmailConfigured()) return { error: 'Gmail is not set up yet (missing Google keys in .env).' }
+    if (!gmailConnected()) return { error: 'Gmail is not connected. Ask Sri to click "Connect Gmail" on the screen.' }
+    try {
+      if (name === 'check_email') return { emails: await listEmails(args) }
+      return { email: await readEmail(args.id) }
+    } catch (err) {
+      console.error(err)
+      return { error: 'Could not reach Gmail right now.' }
+    }
+  }
+
   // 1. Open a website or app (checked first)
   if (name === 'open_thing') {
     if (WEBSITES[args.target]) {
@@ -187,11 +231,25 @@ function nowLocal() {
 }
 
 function systemPrompt() {
-  return `You are Mini Astha, a friendly voice assistant that manages the user's schedule. The user's name is Sri.
+  return `You are Asta, a fiery, loud, big-hearted anime hero who lives on the user's screen. The user's name is Sri.
 The current local date and time is ${nowLocal()}.
 
-Rules:
-- Your answers are spoken out loud: keep them to 1–2 short sentences, no lists or symbols.
+Personality and conversation:
+- You are an original character: a hot-blooded underdog with flame-red spiky hair and a red scarf who never, ever gives up. Never claim to be a character from any existing anime.
+- You are Sri's loyal friend and biggest hype man first, assistant second. Chat naturally about anything: their day, questions, ideas, jokes, advice.
+- Talk with huge energy and confidence: exclamations, "Let's go!", "Yosh!", calling challenges "a fight we're gonna win". Be warm, never mean.
+- When Sri is tired, stressed or doubting themselves, fire them up: remind them that hard work beats everything and that you're in their corner.
+- You're a bit of a goofball about everyday stuff, but serious and focused when Sri needs help.
+- Occasionally ask a short follow-up question, but not every time.
+- Remember what Sri said earlier in this conversation and refer back to it naturally.
+- Only use tools when Sri asks about plans, reminders, email, or opening something. Small talk needs no tools.
+- If you don't know something, say so honestly instead of guessing.
+
+Speaking style:
+- Everything you say is spoken out loud: no lists, markdown, emojis, or symbols.
+- Usually 1–3 short sentences. Go a bit longer only when Sri asks you to explain something.
+
+Agenda rules:
 - Use the tools to read and change the agenda. Never invent events.
 - Before adding: repeat the title, day and time, then ask "Should I save it?". Call add_event only after the user says yes.
 - To change a plan: call list_events to find the id, say the old and new details, ask "Should I change it?", and call update_event only after the user says yes.
@@ -199,6 +257,11 @@ Rules:
 - If the time or day is missing, ask for it.
 - If the user says "remind me X minutes before", pass remindBefore. Otherwise reminders are 10 minutes before.
 - For repeating plans set repeat to daily, weekdays or weekly. Weekly repeats on the same weekday as start. For "every Monday and Wednesday", create one weekly plan for each day.
+Email rules (read-only, you can never send or delete):
+- When Sri asks about email, call check_email. Summarize: how many, who they're from, and what each is about in a few words. Mention anything that looks urgent first.
+- When Sri asks you to read one, call read_email and read it in a natural spoken way: who sent it, then the main point. Summarize long emails instead of reading every word; skip signatures, footers and legal text.
+- Never read out passwords, verification codes or bank details from emails; just say the email contains one.
+- If a tool says Gmail isn't connected, tell Sri to click "Connect Gmail".
 - You can open websites and Mac apps with open_thing. Do it right away without asking, then say what you opened.`
 }
 
@@ -234,7 +297,7 @@ async function chat(messages) {
   if (match) {
     const target = match[1].trim().replace(/\s+/g, '') // "vs code" -> "vscode"
     if (WEBSITES[target] || APPS[target]) {
-      const result = runTool('open_thing', { target })
+      const result = await runTool('open_thing', { target })
       console.log('Quick command:', target)
       if (result.error) return "Sorry, I can't open that."
       return `Opening ${target}.`
@@ -256,7 +319,7 @@ async function chat(messages) {
     const opened = []
     for (const call of msg.tool_calls) {
       const args = JSON.parse(call.function.arguments || '{}')
-      const result = runTool(call.function.name, args)
+      const result = await runTool(call.function.name, args)
       console.log('Tool used:', call.function.name, args)
       if (result.opened) opened.push(result.opened)
       convo.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify(result) })
@@ -282,6 +345,30 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, { agenda: loadAgenda() })
     }
 
+    // ---------- Gmail sign-in ----------
+    const url = new URL(req.url, 'http://localhost:3001')
+
+    if (req.method === 'GET' && url.pathname === '/api/gmail/status') {
+      return sendJson(res, 200, { configured: gmailConfigured(), connected: gmailConnected() })
+    }
+
+    if (req.method === 'GET' && url.pathname === '/api/gmail/auth') {
+      if (!gmailConfigured()) return sendJson(res, 400, { error: 'Add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to .env first' })
+      res.writeHead(302, { Location: authUrl() })
+      return res.end()
+    }
+
+    if (req.method === 'GET' && url.pathname === '/api/gmail/callback') {
+      const code = url.searchParams.get('code')
+      if (!code) {
+        res.writeHead(400, { 'Content-Type': 'text/html' })
+        return res.end('<h2>Gmail was not connected.</h2><p>You can close this tab.</p>')
+      }
+      await finishSignIn(code)
+      res.writeHead(200, { 'Content-Type': 'text/html' })
+      return res.end('<h2>Gmail connected!</h2><p>Asta can now read your email. You can close this tab.</p>')
+    }
+
     if (req.method === 'POST' && req.url === '/api/chat') {
       let body = ''
       for await (const chunk of req) body += chunk
@@ -299,5 +386,5 @@ const server = http.createServer(async (req, res) => {
 })
 
 server.listen(3001, () => {
-  console.log('Mini Astha brain running on http://localhost:3001')
+  console.log('Asta brain running on http://localhost:3001')
 })
