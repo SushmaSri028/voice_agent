@@ -74,6 +74,25 @@ const tools = [
       },
     },
   },
+    {
+    type: 'function',
+    function: {
+      name: 'update_event',
+      description:
+        'Change an existing commitment (new time, title, place or reminder). Call list_events first to get the id. Only call this after the user said yes.',
+      parameters: {
+        type: 'object',
+        properties: {
+          id: { type: 'number' },
+          title: { type: 'string' },
+          start: { type: 'string', description: 'New local date and time, format YYYY-MM-DDTHH:mm' },
+          location: { type: 'string' },
+          remindBefore: { type: 'number' },
+        },
+        required: ['id'],
+      },
+    },
+  },
   {
     type: 'function',
     function: {
@@ -132,6 +151,16 @@ function runTool(name, args) {
     saveAgenda(left)
     return { deleted: left.length !== items.length }
   }
+    if (name === 'update_event') {
+    const item = items.find((i) => i.id === args.id)
+    if (!item) return { error: 'Event not found' }
+    if (args.title) item.title = args.title
+    if (args.start) item.start = args.start
+    if (args.location !== undefined) item.location = args.location
+    if (args.remindBefore !== undefined) item.remindBefore = args.remindBefore
+    saveAgenda(items)
+    return { updated: item }
+  }
 
   // 3. Anything else
   return { error: 'Unknown tool' }
@@ -153,6 +182,7 @@ Rules:
 - Your answers are spoken out loud: keep them to 1–2 short sentences, no lists or symbols.
 - Use the tools to read and change the agenda. Never invent events.
 - Before adding: repeat the title, day and time, then ask "Should I save it?". Call add_event only after the user says yes.
+- To change a plan: call list_events to find the id, say the old and new details, ask "Should I change it?", and call update_event only after the user says yes.
 - Before deleting: call list_events to find the id, ask the user to confirm, and call delete_event only after they say yes.
 - If the time or day is missing, ask for it.
 - If the user says "remind me X minutes before", pass remindBefore. Otherwise reminders are 10 minutes before.
