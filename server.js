@@ -46,6 +46,12 @@ const tools = [
           start: { type: 'string', description: 'Local date and time, format YYYY-MM-DDTHH:mm' },
           location: { type: 'string' },
           remindBefore: {
+                      repeat: {
+            type: 'string',
+            enum: ['none', 'daily', 'weekdays', 'weekly'],
+            description: 'weekly repeats on the same weekday as start',
+          },
+
             type: 'number',
             description: 'Minutes before start to remind the user. Default 10.',
           },
@@ -88,6 +94,10 @@ const tools = [
           start: { type: 'string', description: 'New local date and time, format YYYY-MM-DDTHH:mm' },
           location: { type: 'string' },
           remindBefore: { type: 'number' },
+                    repeat: {
+            type: 'string',
+            enum: ['none', 'daily', 'weekdays', 'weekly'],
+          },
         },
         required: ['id'],
       },
@@ -136,6 +146,7 @@ function runTool(name, args) {
       start: args.start,
       location: args.location || '',
       remindBefore: args.remindBefore ?? 10,
+      repeat: args.repeat || 'none',
     }
     items.push(item)
     saveAgenda(items)
@@ -158,6 +169,7 @@ function runTool(name, args) {
     if (args.start) item.start = args.start
     if (args.location !== undefined) item.location = args.location
     if (args.remindBefore !== undefined) item.remindBefore = args.remindBefore
+    if (args.repeat) item.repeat = args.repeat
     saveAgenda(items)
     return { updated: item }
   }
@@ -186,6 +198,7 @@ Rules:
 - Before deleting: call list_events to find the id, ask the user to confirm, and call delete_event only after they say yes.
 - If the time or day is missing, ask for it.
 - If the user says "remind me X minutes before", pass remindBefore. Otherwise reminders are 10 minutes before.
+- For repeating plans set repeat to daily, weekdays or weekly. Weekly repeats on the same weekday as start. For "every Monday and Wednesday", create one weekly plan for each day.
 - You can open websites and Mac apps with open_thing. Do it right away without asking, then say what you opened.`
 }
 
