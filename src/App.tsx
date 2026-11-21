@@ -35,7 +35,7 @@ function App() {
   const wakeRecognitionRef = useRef<any>(null)
   const wakeModeRef = useRef(false)
   const historyRef = useRef<{ role: 'user' | 'assistant'; content: string }[]>([])
-    const remindedRef = useRef<Set<number>>(
+      const remindedRef = useRef<Set<string>>(
     new Set(JSON.parse(localStorage.getItem('reminded') || '[]'))
   )
 
@@ -59,8 +59,9 @@ function App() {
         const before = (item.remindBefore ?? 10) * 60 * 1000
         const isDue = now >= start - before && now < start
 
-        if (isDue && !remindedRef.current.has(item.id)) {
-          remindedRef.current.add(item.id)
+        const key = `${item.id}@${item.start}` // new time = new reminder
+        if (isDue && !remindedRef.current.has(key)) {
+          remindedRef.current.add(key)
           localStorage.setItem('reminded', JSON.stringify([...remindedRef.current]))
 
           const mins = Math.max(1, Math.round((start - now) / 60000))
