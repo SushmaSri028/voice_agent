@@ -2,11 +2,36 @@ import { useEffect, useRef, useState } from 'react'
 import './App.css'
 
 type Status = 'standby' | 'listening' | 'thinking' | 'speaking'
-type AgendaItem = { id: number; title: string; start: string; location: string; remindBefore?: number }
+type AgendaItem = {
+  id: number
+  title: string
+  start: string
+  location: string
+  remindBefore?: number
+  repeat?: 'none' | 'daily' | 'weekdays' | 'weekly'
+}
 
 // Very forgiving check, based on what Chrome actually heard:
 // "hey hasta", "hey hast", "hey astha", "hasta", "hairst", "hairstyle"...
 // Very forgiving check, based on what Chrome actually heard
+// When does this plan happen next? (handles repeating plans)
+function nextTime(item: AgendaItem, from: Date): Date {
+  const start = new Date(item.start)
+  if (!item.repeat || item.repeat === 'none' || start >= from) return start
+
+  const d = new Date(from)
+  d.setHours(start.getHours(), start.getMinutes(), 0, 0)
+  for (let i = 0; i < 8; i++) {
+    const day = d.getDay() // 0 = Sunday … 6 = Saturday
+    const matches =
+      item.repeat === 'daily' ||
+      (item.repeat === 'weekdays' && day >= 1 && day <= 5) ||
+      (item.repeat === 'weekly' && day === start.getDay())
+    if (matches && d >= from) return new Date(d)
+    d.setDate(d.getDate() + 1)
+  }
+  return start
+}
 function isWakeWord(text: string) {
   const clean = text.toLowerCase().replace(/[^a-z\s]/g, ' ').replace(/\s+/g, ' ').trim()
   return (
@@ -54,12 +79,13 @@ function App() {
       if (status !== 'standby') return // don't interrupt a conversation
 
       const now = Date.now()
-      for (const item of agenda) {
-        const start = new Date(item.start).getTime()
+            for (const item of agenda) {
+        const next = nextTime(item, new Date(now))
+        const start = next.getTime()
         const before = (item.remindBefore ?? 10) * 60 * 1000
         const isDue = now >= start - before && now < start
 
-        const key = `${item.id}@${item.start}` // new time = new reminder
+        const key = `${item.id}@${next.toISOString()}` // each occurrence gets its own reminder// new time = new reminder
         if (isDue && !remindedRef.current.has(key)) {
           remindedRef.current.add(key)
           localStorage.setItem('reminded', JSON.stringify([...remindedRef.current]))
@@ -251,9 +277,11 @@ function App() {
     }
   }
 
-  const upcoming = [...agenda]
-    .filter((item) => new Date(item.start) >= new Date(new Date().toDateString()))
-    .sort((a, b) => a.start.localeCompare(b.start))
+    const todayStart = new Date(new Date().toDateString())
+  const upcoming = agenda
+    .map((item) => ({ ...item, next: nextTime(item, new Date()) }))
+    .filter((item) => item.next >= todayStart)
+    .sort((a, b) => a.next.getTime() - b.next.getTime())
 
   return (
     <div className={`screen ${status}`}>
@@ -261,9 +289,9 @@ function App() {
         <p className="agenda-title">UPCOMING</p>
         {upcoming.length === 0 && <p className="agenda-empty">No plans yet. Ask me to add one.</p>}
         {upcoming.map((item) => (
-          <div key={item.id} className="agenda-item">
+                    <div key={item.id} className="agenda-item">
             <span className="agenda-time">
-              {new Date(item.start).toLocaleString('en-US', {
+              {item.next.toLocaleString('en-US', {
                 weekday: 'short',
                 hour: 'numeric',
                 minute: '2-digit',
@@ -271,6 +299,9 @@ function App() {
             </span>
             <span className="agenda-name">{item.title}</span>
             {item.location && <span className="agenda-place">{item.location}</span>}
+            {item.repeat && item.repeat !== 'none' && (
+              <span className="agenda-repeat">🔁 {item.repeat}</span>
+            )}
           </div>
         ))}
       </aside>
