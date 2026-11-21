@@ -22,6 +22,42 @@ const APPS = {
   calculator: 'Calculator',
   chrome: 'Google Chrome',
 }
+const HOME_CITY = 'Boca Raton';
+let lastWeather = null;
+
+const WEATHER_CODES = {
+  0: 'clear sky', 1: 'mostly clear', 2: 'partly cloudy', 3: 'cloudy',
+  45: 'foggy', 48: 'foggy', 51: 'light drizzle', 53: 'drizzle', 55: 'heavy drizzle',
+  61: 'light rain', 63: 'rain', 65: 'heavy rain', 80: 'rain showers',
+  81: 'rain showers', 82: 'heavy showers', 95: 'thunderstorm',
+  96: 'thunderstorm with hail', 99: 'thunderstorm with hail',
+};
+
+async function getWeather(city = HOME_CITY) {
+  const geo = await fetch(
+    `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(city)}&count=1`
+  ).then(r => r.json());
+  const place = geo.results?.[0];
+  if (!place) return { error: `City not found: ${city}` };
+
+  const url =
+    `https://api.open-meteo.com/v1/forecast?latitude=${place.latitude}&longitude=${place.longitude}` +
+    `&current=temperature_2m,apparent_temperature,weather_code,wind_speed_10m` +
+    `&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max` +
+    `&temperature_unit=fahrenheit&wind_speed_unit=mph&timezone=auto&forecast_days=1`;
+  const w = await fetch(url).then(r => r.json());
+
+  return {
+    city: place.name,
+    temp: Math.round(w.current.temperature_2m),
+    feelsLike: Math.round(w.current.apparent_temperature),
+    condition: WEATHER_CODES[w.current.weather_code] || 'mixed weather',
+    high: Math.round(w.daily.temperature_2m_max[0]),
+    low: Math.round(w.daily.temperature_2m_min[0]),
+    rainChance: w.daily.precipitation_probability_max[0],
+    wind: Math.round(w.current.wind_speed_10m),
+  };
+}
 
 // ---------- Agenda storage (a simple JSON file) ----------
 function loadAgenda() {
@@ -151,6 +187,19 @@ const tools = [
       },
     },
   },
+  {
+  type: 'function',
+  function: {
+    name: 'get_weather',
+    description: "Get current weather and today's forecast. Use for weather, temperature, rain or what-to-wear questions.",
+    parameters: {
+      type: 'object',
+      properties: {
+        city: { type: 'string', description: 'City name only, e.g. "Miami". Leave empty for the user\'s home city.' },
+      },
+    },
+  },
+},
 ]
 
 async function runTool(name, args) {
@@ -179,6 +228,14 @@ async function runTool(name, args) {
     }
     return { error: 'Not allowed' }
   }
+  if (name === 'get_weather') {
+  try {
+    lastWeather = await getWeather(args.city || HOME_CITY);
+    return lastWeather;
+  } catch {
+    return { error: 'Weather service not reachable' };
+  }
+}
 
   // 2. Agenda tools
   const items = loadAgenda()
@@ -262,6 +319,7 @@ Email rules (read-only, you can never send or delete):
 - When Sri asks you to read one, call read_email and read it in a natural spoken way: who sent it, then the main point. Summarize long emails instead of reading every word; skip signatures, footers and legal text.
 - Never read out passwords, verification codes or bank details from emails; just say the email contains one.
 - If a tool says Gmail isn't connected, tell Sri to click "Connect Gmail".
+- For weather questions call get_weather. Answer in one short sentence: temperature in °F, condition, and rain chance only if it is above 30%. If no city is named, use the user's home city.
 - You can open websites and Mac apps with open_thing. Do it right away without asking, then say what you opened.`
 }
 
@@ -369,13 +427,13 @@ const server = http.createServer(async (req, res) => {
       return res.end('<h2>Gmail connected!</h2><p>Asta can now read your email. You can close this tab.</p>')
     }
 
-    if (req.method === 'POST' && req.url === '/api/chat') {
+      if (req.method === 'POST' && req.url === '/api/chat') {
       let body = ''
       for await (const chunk of req) body += chunk
       const { messages } = JSON.parse(body)
-
+      lastWeather = null
       const reply = await chat(messages)
-      return sendJson(res, 200, { reply, agenda: loadAgenda() })
+      return sendJson(res, 200, { reply, agenda: loadAgenda(), weather: lastWeather })
     }
 
     sendJson(res, 404, { error: 'Not found' })
